@@ -2,3 +2,4 @@ telethon
 yt-dlp
 youtube-search-python
 flask
+gunicorn
