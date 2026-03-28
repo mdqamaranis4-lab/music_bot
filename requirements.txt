@@ -1,4 +1,4 @@
 telethon
-yt-dlp>=2025.01.15
+yt-dlp
+youtube-search-python
 flask
-gunicorn
