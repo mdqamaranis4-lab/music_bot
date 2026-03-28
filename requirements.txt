@@ -1,5 +1,5 @@
-telethon
-yt-dlp
+telethon==1.36.0
+yt-dlp>=2025.01.15
 youtube-search-python
 flask
 gunicorn
