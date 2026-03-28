@@ -1,92 +1,79 @@
 import os
-import yt_dlp
-import threading
 import asyncio
+import threading
 from flask import Flask
 from telethon import TelegramClient, events
 from youtube_search import YoutubeSearch
+import yt_dlp
 
-# --- Flask Server (Render isse active rehta hai) ---
+# --- Flask for Render Health Check ---
 app = Flask(__name__)
 
 @app.route('/')
-def health_check():
+def home():
     return "Bot is Running!"
 
 def run_flask():
-    # Render default port 10000 use karta hai
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# --- Bot Details ---
+# --- Bot Configuration ---
 API_ID = 36209925
 API_HASH = '59e1a8970239f845b05d7a5adc2e2af1'
 BOT_TOKEN = '8416504909:AAGQj6B303vvnFSRbMZyriMESZ8prRB6btw'
 
-client = TelegramClient('phonk_session', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+client = TelegramClient('music_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
-# --- Audio Download Logic ---
+# --- Audio Downloader ---
 def download_audio(url):
-    file_name = "song.mp3"
-    ydl_opts = {
+    opts = {
         'format': 'bestaudio/best',
-        'outtmpl': file_name,
+        'outtmpl': 'song.mp3',
         'quiet': True,
-        'no_warnings': True,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
-    return file_name
+    return 'song.mp3'
 
-# --- Handlers ---
+# --- Events ---
 @client.on(events.NewMessage(pattern='/start'))
-async def start(event):
-    await event.respond("🎵 **PHONK MUSIC BOT** 🎵\n\nGaane ka naam likhein, main dhoond kar bhej dunga!")
+async def start_cmd(event):
+    await event.reply("👋 Hi! Gaane ka naam likho, main download kar dunga.")
 
 @client.on(events.NewMessage)
-async def handle_music(event):
-    # Loop Fix: Bot apne messages ko ignore karega
-    me = await client.get_me()
-    if event.sender_id == me.id or event.text.startswith('/'):
+async def handle_msg(event):
+    if event.text.startswith('/') or event.sender_id == (await client.get_me()).id:
         return
-    
+
     query = event.text
-    status = await event.respond(f"🔍 `{query}` dhoond raha hoon...")
+    msg = await event.respond(f"🔍 Searching for: `{query}`...")
 
     try:
-        # Search Fix: YoutubeSearch ka use
-        results = YoutubeSearch(query, max_results=1).to_dict()
-        if not results:
-            await status.edit("❌ Maaf kijiye, gaana nahi mila.")
+        search = YoutubeSearch(query, max_results=1).to_dict()
+        if not search:
+            await msg.edit("❌ Gana nahi mila!")
             return
 
-        video_id = results[0]['id']
-        video_url = f"https://www.youtube.com/watch?v={video_id}"
-        title = results[0]['title']
+        url = f"https://www.youtube.com/watch?v={search[0]['id']}"
+        title = search[0]['title']
 
-        await status.edit(f"📥 `{title}` download ho raha hai...")
-        
-        # Download in background
-        file_path = await asyncio.to_thread(download_audio, video_url)
-        
-        # Uploading
-        await client.send_file(event.chat_id, file_path, caption=f"🎵 **{title}**\n\n✨ @PhonkMusicBot")
-        
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        await status.delete()
+        await msg.edit(f"📥 Downloading: `{title}`...")
+        file = await asyncio.to_thread(download_audio, url)
 
+        await client.send_file(event.chat_id, file, caption=f"🎵 {title}")
+        os.remove(file)
+        await msg.delete()
     except Exception as e:
         print(f"Error: {e}")
-        await status.edit("❌ Kuch error aaya. Dubara koshish karein.")
+        await msg.edit("⚠️ Kuch error aaya, please try again.")
 
 if __name__ == "__main__":
-    # Web server start
-    threading.Thread(target=run_flask).start()
-    print("🚀 Bot is live!")
+    # Start Flask in a separate thread
+    threading.Thread(target=run_flask, daemon=True).start()
+    print("🚀 Bot is running...")
     client.run_until_disconnected()
